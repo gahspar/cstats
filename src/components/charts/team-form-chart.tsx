@@ -9,14 +9,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { teamInsights } from "@/lib/api/mock-data";
 
-const data = ["D-30", "D-21", "D-14", "D-7", "Hoje"].map((label, index) => ({
-  label,
-  Vitality: teamInsights[0].form[index],
-  FURIA: teamInsights[1].form[index],
-  FaZe: teamInsights[2].form[index],
-}));
+const data = [
+  { label: "D-30", RankingTop1: 72, RankingTop2: 68, RankingTop3: 64 },
+  { label: "D-21", RankingTop1: 70, RankingTop2: 69, RankingTop3: 62 },
+  { label: "D-14", RankingTop1: 74, RankingTop2: 67, RankingTop3: 65 },
+  { label: "D-7", RankingTop1: 76, RankingTop2: 71, RankingTop3: 66 },
+  { label: "Hoje", RankingTop1: 78, RankingTop2: 72, RankingTop3: 68 },
+];
 
 export function TeamFormChart() {
   return (
@@ -44,9 +44,9 @@ export function TeamFormChart() {
               color: "#e7edf5",
             }}
           />
-          <Area type="monotone" dataKey="Vitality" stroke="#38bdf8" fill="url(#vitality)" strokeWidth={2} />
-          <Area type="monotone" dataKey="FURIA" stroke="#22c55e" fill="url(#furia)" strokeWidth={2} />
-          <Area type="monotone" dataKey="FaZe" stroke="#f59e0b" fill="transparent" strokeWidth={2} />
+          <Area type="monotone" dataKey="RankingTop1" stroke="#38bdf8" fill="url(#vitality)" strokeWidth={2} />
+          <Area type="monotone" dataKey="RankingTop2" stroke="#22c55e" fill="url(#furia)" strokeWidth={2} />
+          <Area type="monotone" dataKey="RankingTop3" stroke="#f59e0b" fill="transparent" strokeWidth={2} />
         </AreaChart>
       </ResponsiveContainer>
     </div>

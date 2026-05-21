@@ -6,3 +6,4 @@ export { syncOdds } from "./sync-odds";
 export { syncPlayers } from "./sync-players";
 export { syncRankings } from "./sync-rankings";
 export { syncTeams } from "./sync-teams";
+export { syncTeamDetail } from "./sync-team-detail";

@@ -2,7 +2,16 @@
 
 import axios from "axios";
 import { useQuery } from "@tanstack/react-query";
-import type { BettingSuggestion, CsApiMatch, CsApiPlayerStats, CsApiRankingTeam, CsApiTeam, GlobalSearchResult } from "@/types/csapi";
+import type {
+  BettingSuggestion,
+  GlobalSearchResult,
+  PlatformMatch,
+  PlatformOdds,
+  PlatformPlayer,
+  PlatformRankingTeam,
+  PlatformTeam,
+  PlatformTeamRef,
+} from "@/types/platform";
 
 type ApiEnvelope<T> = {
   data: T;
@@ -20,27 +29,32 @@ type MatchRow = {
   status: string;
   starts_at?: string | null;
   event_name?: string | null;
-  team1?: { id?: number; name?: string; score?: number; rank?: number } | null;
-  team2?: { id?: number; name?: string; score?: number; rank?: number } | null;
+  team1?: PlatformTeamRef | null;
+  team2?: PlatformTeamRef | null;
   format?: string | null;
   maps?: Array<{ name: string; team1Rounds?: number | null; team2Rounds?: number | null }>;
-  odds?: Array<{ provider: string; team1?: number | null; team2?: number | null }>;
   stars?: number | null;
+  source?: string;
 };
 
 type RankingRow = {
   team_id: number;
-  team: { id?: number; name?: string; country?: string; rank?: number };
+  team: PlatformTeamRef;
   place: number;
   points: number;
   change: number;
+  is_new?: boolean;
 };
 
 type TeamRow = {
   id: number;
   name: string;
+  logo_url?: string | null;
   country?: string | null;
   rank?: number | null;
+  players?: PlatformPlayer[];
+  ranking_development?: number[];
+  raw?: unknown;
 };
 
 type PlayerRow = {
@@ -50,11 +64,13 @@ type PlayerRow = {
   team?: { name?: string } | null;
   statistics?: {
     rating?: number | null;
-    killsPerRound?: number | null;
+    rating1?: number | null;
+    rating2?: number | null;
+    kd?: number | null;
     headshots?: number | null;
     mapsPlayed?: number | null;
-    deathsPerRound?: number | null;
-    roundsContributed?: number | null;
+    maps?: number | null;
+    rounds?: number | null;
   };
 };
 
@@ -72,74 +88,77 @@ async function getInternal<T>(url: string): Promise<T> {
   return data.data;
 }
 
-function mapMatch(row: MatchRow): CsApiMatch {
-  const firstMap = row.maps?.[0];
-
+function mapMatch(row: MatchRow): PlatformMatch {
   return {
     id: row.id,
-    date: row.starts_at ?? undefined,
+    title: row.title ?? null,
+    status: row.status,
+    startsAt: row.starts_at ?? null,
     event: row.event_name ?? "HLTV",
-    format: row.format ?? undefined,
-    team1: {
-      id: row.team1?.id ?? row.id * 10 + 1,
-      name: row.team1?.name ?? "TBD",
-      score: row.team1?.score ?? firstMap?.team1Rounds ?? undefined,
-      rank: row.team1?.rank,
-    },
-    team2: {
-      id: row.team2?.id ?? row.id * 10 + 2,
-      name: row.team2?.name ?? "TBD",
-      score: row.team2?.score ?? firstMap?.team2Rounds ?? undefined,
-      rank: row.team2?.rank,
-    },
-    maps: row.maps?.map((map) => ({
-      name: map.name,
-      team1_score: map.team1Rounds ?? undefined,
-      team2_score: map.team2Rounds ?? undefined,
-    })),
+    format: row.format ?? null,
+    team1: row.team1 ?? { id: row.id * 10 + 1, name: "TBD" },
+    team2: row.team2 ?? { id: row.id * 10 + 2, name: "TBD" },
+    maps: row.maps ?? [],
+    stars: row.stars ?? null,
+    source: "hltv",
   };
 }
 
-function mapRanking(row: RankingRow): CsApiRankingTeam {
+function mapRanking(row: RankingRow): PlatformRankingTeam {
   return {
     id: row.team_id,
     rank: row.place,
     name: row.team?.name ?? `Team ${row.team_id}`,
-    country: row.team?.country,
+    country: row.team?.country ?? null,
+    logoUrl: row.team?.logoUrl ?? null,
     points: row.points,
     change: row.change,
+    isNew: row.is_new ?? false,
   };
 }
 
-function mapTeam(row: TeamRow): CsApiTeam {
+function mapTeam(row: TeamRow): PlatformTeam {
   return {
     id: row.id,
     name: row.name,
-    rank: row.rank ?? undefined,
-    country: row.country ?? undefined,
+    rank: row.rank ?? null,
+    country: row.country ?? null,
+    logoUrl: row.logo_url ?? null,
+    players:
+      row.players?.map((player) => ({
+        ...player,
+        name: player.name ?? (player as unknown as { nickname?: string }).nickname ?? `Player ${player.id}`,
+      })) ?? [],
+    rankingDevelopment: row.ranking_development ?? [],
+    raw: row.raw,
   };
 }
 
-function mapPlayer(row: PlayerRow): CsApiPlayerStats {
+function mapPlayer(row: PlayerRow): PlatformPlayer {
   const stats = row.statistics ?? {};
-  const killsPerRound = stats.killsPerRound ?? undefined;
-  const deathsPerRound = stats.deathsPerRound ?? undefined;
 
   return {
     id: row.id,
     name: row.nickname,
-    team: row.team?.name,
-    rating: stats.rating ?? undefined,
-    maps: stats.mapsPlayed ?? undefined,
-    hs: stats.headshots ?? undefined,
-    kd: killsPerRound && deathsPerRound ? killsPerRound / deathsPerRound : undefined,
+    fullName: row.full_name ?? null,
+    team: row.team?.name ?? null,
+    rating: stats.rating2 ?? stats.rating ?? stats.rating1 ?? null,
+    kd: stats.kd ?? null,
+    hs: stats.headshots ?? null,
+    maps: stats.mapsPlayed ?? stats.maps ?? null,
+    rounds: stats.rounds ?? null,
   };
 }
 
-export function usePlatformMatches(pageSize = 50) {
+export function usePlatformMatches(pageSize?: number | "all", status?: string) {
+  const params = new URLSearchParams();
+  if (pageSize && pageSize !== "all") params.set("pageSize", String(pageSize));
+  if (pageSize === "all") params.set("all", "true");
+  if (status) params.set("status", status);
+
   return useQuery({
-    queryKey: ["hltv", "matches", { pageSize }],
-    queryFn: async () => (await getInternal<MatchRow[]>(`/api/matches?pageSize=${pageSize}`)).map(mapMatch),
+    queryKey: ["hltv", "matches", { pageSize, status }],
+    queryFn: async () => (await getInternal<MatchRow[]>(`/api/matches?${params.toString()}`)).map(mapMatch),
     initialData: [],
   });
 }
@@ -153,32 +172,57 @@ export function usePlatformLiveMatches() {
   });
 }
 
-export function usePlatformRankings(limit = 30) {
+export function usePlatformRankings(limit?: number | "all") {
+  const suffix = limit === "all" ? "?all=true" : limit ? `?limit=${limit}` : "";
+
   return useQuery({
     queryKey: ["hltv", "rankings", { limit }],
-    queryFn: async () => (await getInternal<RankingRow[]>(`/api/rankings?limit=${limit}`)).map(mapRanking),
+    queryFn: async () => (await getInternal<RankingRow[]>(`/api/rankings${suffix}`)).map(mapRanking),
     initialData: [],
     staleTime: 60 * 60 * 1000,
   });
 }
 
-export function usePlatformTeams(query?: string, pageSize = 100) {
-  const search = query ? `&query=${encodeURIComponent(query)}` : "";
+export function usePlatformTeams(query?: string, pageSize?: number | "all") {
+  const params = new URLSearchParams();
+  if (pageSize && pageSize !== "all") params.set("pageSize", String(pageSize));
+  if (pageSize === "all") params.set("all", "true");
+  if (query) params.set("query", query);
 
   return useQuery({
     queryKey: ["hltv", "teams", { query, pageSize }],
-    queryFn: async () => (await getInternal<TeamRow[]>(`/api/teams?pageSize=${pageSize}${search}`)).map(mapTeam),
+    queryFn: async () => (await getInternal<TeamRow[]>(`/api/teams?${params.toString()}`)).map(mapTeam),
     initialData: [],
     staleTime: 60 * 60 * 6 * 1000,
   });
 }
 
-export function usePlatformPlayers(query?: string, pageSize = 100) {
-  const search = query ? `&query=${encodeURIComponent(query)}` : "";
+export function usePlatformTeam(teamId?: number) {
+  return useQuery({
+    queryKey: ["hltv", "team", teamId],
+    queryFn: async () => mapTeam(await getInternal<TeamRow>(`/api/teams/${teamId}`)),
+    enabled: Boolean(teamId),
+  });
+}
+
+export function usePlatformTeamMatches(teamId?: number) {
+  return useQuery({
+    queryKey: ["hltv", "team", teamId, "matches"],
+    queryFn: async () => (await getInternal<MatchRow[]>(`/api/teams/${teamId}/matches`)).map(mapMatch),
+    enabled: Boolean(teamId),
+    initialData: [],
+  });
+}
+
+export function usePlatformPlayers(query?: string, pageSize?: number | "all") {
+  const params = new URLSearchParams();
+  if (pageSize && pageSize !== "all") params.set("pageSize", String(pageSize));
+  if (pageSize === "all") params.set("all", "true");
+  if (query) params.set("query", query);
 
   return useQuery({
     queryKey: ["hltv", "players", { query, pageSize }],
-    queryFn: async () => (await getInternal<PlayerRow[]>(`/api/players?pageSize=${pageSize}${search}`)).map(mapPlayer),
+    queryFn: async () => (await getInternal<PlayerRow[]>(`/api/players?${params.toString()}`)).map(mapPlayer),
     initialData: [],
     staleTime: 60 * 60 * 6 * 1000,
   });
@@ -187,16 +231,24 @@ export function usePlatformPlayers(query?: string, pageSize = 100) {
 export function usePlatformOdds(limit = 100) {
   return useQuery({
     queryKey: ["hltv", "odds", { limit }],
-    queryFn: () => getInternal<OddsRow[]>(`/api/odds?limit=${limit}`),
+    queryFn: async () =>
+      (await getInternal<OddsRow[]>(`/api/odds?limit=${limit}`)).map((odd): PlatformOdds => ({
+        id: odd.id,
+        matchId: odd.match_id,
+        provider: odd.provider,
+        team1: odd.team1 ?? null,
+        team2: odd.team2 ?? null,
+        capturedAt: odd.captured_at,
+      })),
     initialData: [],
     refetchInterval: 15_000,
   });
 }
 
-export function buildOddsSuggestions(odds: OddsRow[]): BettingSuggestion[] {
+export function buildOddsSuggestions(odds: PlatformOdds[]): BettingSuggestion[] {
   return odds.slice(0, 4).map((odd) => ({
     id: odd.id,
-    match: `Match #${odd.match_id}`,
+    match: `Match #${odd.matchId}`,
     market: `${odd.provider} - moneyline`,
     confidence: 52,
     edge: "monitorar",
@@ -206,9 +258,9 @@ export function buildOddsSuggestions(odds: OddsRow[]): BettingSuggestion[] {
 
 export function usePlatformSearchResults(query: string): GlobalSearchResult[] {
   const normalized = query.trim().toLowerCase();
-  const { data: rankings = [] } = usePlatformRankings(30);
-  const { data: players = [] } = usePlatformPlayers(undefined, 50);
-  const { data: matches = [] } = usePlatformMatches(30);
+  const { data: rankings = [] } = usePlatformRankings("all");
+  const { data: players = [] } = usePlatformPlayers(undefined, "all");
+  const { data: matches = [] } = usePlatformMatches("all");
 
   if (!normalized) return [];
 
@@ -220,7 +272,7 @@ export function usePlatformSearchResults(query: string): GlobalSearchResult[] {
       type: "team",
       title: team.name,
       subtitle: `#${team.rank} HLTV - ${team.points ?? "-"} pts`,
-      href: `/teams?query=${encodeURIComponent(team.name)}`,
+      href: `/teams/${team.id}`,
     }));
 
   const playerResults: GlobalSearchResult[] = players

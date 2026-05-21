@@ -10,10 +10,5 @@ export function GET() {
       ingestion: "/api/cron/hltv",
       routes: ["/api/matches", "/api/live", "/api/teams", "/api/players", "/api/rankings", "/api/events", "/api/odds"],
     },
-    csApi: {
-      baseUrl: process.env.CS_API_BASE_URL ?? "https://api.csapi.de",
-      fallback: true,
-      proxy: "/api/cs/*",
-    },
   });
 }

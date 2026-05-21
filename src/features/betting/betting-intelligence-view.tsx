@@ -4,7 +4,7 @@ import { Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useLatestMatches, useRankings } from "@/hooks/use-csapi";
+import { usePlatformMatches, usePlatformRankings } from "@/hooks/use-platform-data";
 import { useAnalysisHistory } from "@/hooks/use-analysis-history";
 import { buildBettingSuggestions } from "@/lib/analytics/betting-model";
 
@@ -19,8 +19,8 @@ const factors = [
 ];
 
 export function BettingIntelligenceView() {
-  const { data: matches = [] } = useLatestMatches();
-  const { data: rankings = [] } = useRankings();
+  const { data: matches = [] } = usePlatformMatches("all");
+  const { data: rankings = [] } = usePlatformRankings("all");
   const { history, saveAnalysis } = useAnalysisHistory();
   const bettingSuggestions = buildBettingSuggestions(matches, rankings);
 

@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useLocalStorage } from "@/hooks/use-local-storage";
-import type { BettingSuggestion } from "@/types/csapi";
+import type { BettingSuggestion } from "@/types/platform";
 
 export type SavedAnalysis = {
   id: string;

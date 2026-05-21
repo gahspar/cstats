@@ -1,8 +1,6 @@
 import { hltvRankingsService } from "@/services/hltv";
 import { hltvRepository } from "@/repositories/hltv.repository";
 import { cacheRepository } from "@/repositories/cache.repository";
-import { csapiService } from "@/lib/api/csapi-service";
-import { normalizeCsApiRanking } from "@/services/csapi/fallback-normalizers";
 import { logWorker } from "./sync-context";
 
 export async function syncRankings() {
@@ -17,10 +15,7 @@ export async function syncRankings() {
     return rankings;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const fallback = (await csapiService.getRankings()).map(normalizeCsApiRanking);
-    await hltvRepository.replaceRankings(fallback);
-    await cacheRepository.set("csapi:rankings:fallback", "rankings", fallback);
-    await logWorker(worker, "success", fallback.length, `HLTV unavailable; CSAPI fallback used. ${message}`, {}, "csapi");
-    return fallback;
+    await logWorker(worker, "error", 0, message);
+    throw error;
   }
 }

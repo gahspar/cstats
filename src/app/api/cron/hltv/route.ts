@@ -18,7 +18,12 @@ export async function POST(request: NextRequest) {
 
   const task = request.nextUrl.searchParams.get("task") ?? "all";
   const startedAt = Date.now();
-  const { syncAll, syncEvents, syncLiveMatches, syncMatches, syncOdds, syncPlayers, syncRankings, syncTeams } = await import("@/workers");
+  const { syncAll, syncEvents, syncLiveMatches, syncMatches, syncOdds, syncPlayers, syncRankings, syncTeamDetail, syncTeams } = await import("@/workers");
+  const id = Number(request.nextUrl.searchParams.get("id"));
+
+  if (task === "team" && !Number.isFinite(id)) {
+    return NextResponse.json({ error: "Missing team id" }, { status: 400 });
+  }
 
   const result =
     task === "live"
@@ -28,13 +33,15 @@ export async function POST(request: NextRequest) {
         : task === "rankings"
           ? await syncRankings()
           : task === "teams"
-            ? await syncTeams()
+            ? await syncTeams(request.nextUrl.searchParams.get("details") === "true")
+            : task === "team"
+              ? await syncTeamDetail(id)
             : task === "events"
               ? await syncEvents()
               : task === "players"
                 ? await syncPlayers([])
                 : task === "odds"
-                  ? await syncOdds()
+                  ? await syncOdds(Number.isFinite(id) ? id : undefined)
                   : await syncAll();
 
   return NextResponse.json({

@@ -8,14 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, Td, Th } from "@/components/ui/table";
-import { useLatestMatches } from "@/hooks/use-csapi";
 import { usePlatformMatches } from "@/hooks/use-platform-data";
 
 export function MatchesView() {
   const searchParams = useSearchParams();
-  const { data: fallbackMatches = [] } = useLatestMatches();
-  const { data: platformMatches = [] } = usePlatformMatches(100);
-  const matches = platformMatches.length > 0 ? platformMatches : fallbackMatches;
+  const { data: matches = [] } = usePlatformMatches("all");
   const [query, setQuery] = useState(searchParams.get("query") ?? "");
   const [formatFilter, setFormatFilter] = useState<"all" | "bo1" | "bo3" | "bo5">("all");
 
@@ -77,12 +74,12 @@ export function MatchesView() {
             <tbody>
               {filteredMatches.map((match, index) => (
                 <tr key={match.id}>
-                  <Td className="font-mono">{match.date ? format(new Date(match.date), "HH:mm") : "--:--"}</Td>
+                  <Td className="font-mono">{match.startsAt ? format(new Date(match.startsAt), "dd/MM HH:mm") : "--:--"}</Td>
                   <Td className="font-medium text-slate-100">{match.team1.name} vs {match.team2.name}</Td>
-                  <Td>{match.event ?? "CS API"}</Td>
+                  <Td>{match.event ?? "HLTV"}</Td>
                   <Td><Badge variant="muted">{match.format ?? "BO3"}</Badge></Td>
                   <Td>{match.maps?.[0]?.name ?? "-"}</Td>
-                  <Td><Badge variant={index === 0 ? "success" : "default"}>{62 - index * 4}%</Badge></Td>
+                  <Td><Badge variant={index === 0 ? "success" : "default"}>{Math.max(50, 68 - index * 3)}%</Badge></Td>
                   <Td className="font-mono">{match.team1.score ?? "-"} : {match.team2.score ?? "-"}</Td>
                 </tr>
               ))}

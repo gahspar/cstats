@@ -8,7 +8,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { useGlobalSearchResults } from "@/hooks/use-csapi";
 import { usePlatformSearchResults } from "@/hooks/use-platform-data";
 
 export function Header() {
@@ -17,9 +16,7 @@ export function Header() {
   const [panel, setPanel] = useState<"notifications" | "settings" | null>(null);
   const router = useRouter();
   const queryClient = useQueryClient();
-  const platformResults = usePlatformSearchResults(query);
-  const fallbackResults = useGlobalSearchResults(query);
-  const results = platformResults.length > 0 ? platformResults : fallbackResults;
+  const results = usePlatformSearchResults(query);
 
   function submitSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,7 +72,7 @@ export function Header() {
 
       <div className="ml-auto flex items-center gap-2">
         <Badge variant="success" className="hidden sm:inline-flex">
-          API publica
+          HLTV cache
         </Badge>
         <Button
           variant="ghost"
@@ -83,7 +80,6 @@ export function Header() {
           aria-label="Atualizar dados"
           onClick={() => {
             queryClient.invalidateQueries({ queryKey: ["hltv"] });
-            queryClient.invalidateQueries({ queryKey: ["csapi"] });
           }}
         >
           <RefreshCw className="h-4 w-4" />
@@ -111,9 +107,6 @@ export function Header() {
                 <div className="text-sm font-semibold text-slate-100">Notificacoes</div>
                 <div className="rounded-md border border-slate-800 bg-slate-950/40 p-3 text-sm text-slate-400">
                   Dados HLTV sincronizados via cache local e rotas internas.
-                </div>
-                <div className="rounded-md border border-slate-800 bg-slate-950/40 p-3 text-sm text-slate-400">
-                  CSAPI permanece disponivel como fallback complementar.
                 </div>
               </div>
             ) : (

@@ -1,7 +1,7 @@
 import type { GetPlayerRankingOptions } from "hltv";
 import type { NormalizedPlayer } from "@/types/hltv";
 import { hltvClient } from "./client";
-import { normalizePlayer } from "./normalizers";
+import { normalizePlayer, normalizePlayerRanking } from "./normalizers";
 import { dedupe, withRetry } from "./service-utils";
 
 export const hltvPlayersService = {
@@ -20,7 +20,10 @@ export const hltvPlayersService = {
   async getPlayerRanking(args?: GetPlayerRankingOptions) {
     return dedupe(`hltv:player-ranking:${JSON.stringify(args ?? {})}`, () =>
       withRetry(
-        () => hltvClient.getPlayerRanking(args),
+        async () => {
+          const ranking = await hltvClient.getPlayerRanking(args);
+          return ranking.map(normalizePlayerRanking);
+        },
         { service: "players", method: "getPlayerRanking", args },
       ),
     );

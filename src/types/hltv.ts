@@ -1,4 +1,4 @@
-export type DataProvider = "hltv" | "csapi" | "cache";
+export type DataProvider = "hltv" | "cache";
 
 export type MatchLifecycle = "scheduled" | "live" | "finished" | "postponed" | "deleted";
 
@@ -82,6 +82,10 @@ export interface NormalizedMatch {
 export interface NormalizedTeam extends NormalizedTeamRef {
   players: NormalizedPlayerRef[];
   rankingDevelopment: number[];
+  overview?: Record<string, number>;
+  mapStats?: Record<string, unknown>;
+  recentMatches?: unknown[];
+  events?: unknown[];
   social?: Record<string, string | null | undefined>;
   raw: unknown;
 }
@@ -95,6 +99,7 @@ export interface NormalizedPlayer extends NormalizedPlayerRef {
     mapsPlayed?: number | null;
     deathsPerRound?: number | null;
     roundsContributed?: number | null;
+    kd?: number | null;
   };
   achievements?: unknown[];
   raw: unknown;

@@ -2,12 +2,13 @@ import { hltvMatchesService, hltvOddsService } from "@/services/hltv";
 import { hltvRepository } from "@/repositories/hltv.repository";
 import { logWorker } from "./sync-context";
 
-export async function syncOdds(limit = 20) {
+export async function syncOdds(limit?: number) {
   const worker = "sync-odds";
   await logWorker(worker, "started", 0, undefined, { limit });
 
   try {
-    const matches = (await hltvMatchesService.getMatches()).slice(0, limit);
+    const source = await hltvMatchesService.getMatches();
+    const matches = limit ? source.slice(0, limit) : source;
     let oddsCount = 0;
 
     for (const match of matches) {

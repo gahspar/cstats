@@ -1,8 +1,6 @@
 import { hltvMatchesService } from "@/services/hltv";
 import { hltvRepository } from "@/repositories/hltv.repository";
 import { cacheRepository } from "@/repositories/cache.repository";
-import { csapiService } from "@/lib/api/csapi-service";
-import { normalizeCsApiMatch } from "@/services/csapi/fallback-normalizers";
 import { logWorker } from "./sync-context";
 
 export async function syncMatches() {
@@ -10,23 +8,29 @@ export async function syncMatches() {
   await logWorker(worker, "started");
 
   try {
-    const matches = await hltvMatchesService.getMatches();
+    const today = new Date();
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - 14);
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() + 1);
+    const date = (value: Date) => value.toISOString().slice(0, 10);
+    const settled = await Promise.allSettled([
+      hltvMatchesService.getMatches(),
+      hltvMatchesService.getResults({ startDate: date(startDate), endDate: date(endDate) }),
+    ]);
+    const matches = settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
     if (matches.length === 0) {
-      throw new Error("HLTV returned no matches");
+      const messages = settled.map((result) => (result.status === "rejected" ? String(result.reason) : "empty")).join(" | ");
+      throw new Error(`HLTV returned no matches: ${messages}`);
     }
 
-    await hltvRepository.upsertMatches(matches);
+    await hltvRepository.replaceMatches(matches);
     await cacheRepository.set("hltv:matches", "matches", matches);
     await logWorker(worker, "success", matches.length);
     return matches;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const latest = await csapiService.getLatestMatches();
-    const source = latest.length > 0 ? latest : await csapiService.getMatches(100, 0);
-    const fallback = source.map(normalizeCsApiMatch);
-    await hltvRepository.upsertMatches(fallback);
-    await cacheRepository.set("csapi:matches:fallback", "matches", fallback);
-    await logWorker(worker, "success", fallback.length, `HLTV unavailable; CSAPI fallback used. ${message}`, {}, "csapi");
-    return fallback;
+    await logWorker(worker, "error", 0, message);
+    throw error;
   }
 }

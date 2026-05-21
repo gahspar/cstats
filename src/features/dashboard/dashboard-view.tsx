@@ -9,32 +9,26 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { Table, Td, Th } from "@/components/ui/table";
-import { useDatasetCounts, useLatestMatches, useMaps, usePlayerStats, useRankings, useSides } from "@/hooks/use-csapi";
 import {
   buildOddsSuggestions,
+  usePlatformLiveMatches,
   usePlatformMatches,
   usePlatformOdds,
   usePlatformPlayers,
   usePlatformRankings,
+  usePlatformTeams,
 } from "@/hooks/use-platform-data";
 import { buildBettingSuggestions } from "@/lib/analytics/betting-model";
-import { teamInsights } from "@/lib/api/mock-data";
 
 export function DashboardView() {
-  const { data: counts } = useDatasetCounts();
-  const { data: fallbackMatches = [] } = useLatestMatches();
-  const { data: fallbackRankings = [] } = useRankings();
-  const { data: fallbackPlayers = [] } = usePlayerStats();
-  const { data: platformMatches = [] } = usePlatformMatches();
-  const { data: platformRankings = [] } = usePlatformRankings();
-  const { data: platformPlayers = [] } = usePlatformPlayers();
+  const { data: matches = [] } = usePlatformMatches("all");
+  const { data: liveMatches = [] } = usePlatformLiveMatches();
+  const { data: rankings = [] } = usePlatformRankings("all");
+  const { data: teams = [] } = usePlatformTeams(undefined, "all");
+  const { data: players = [] } = usePlatformPlayers(undefined, "all");
   const { data: odds = [] } = usePlatformOdds(20);
-  const { data: maps = [] } = useMaps();
-  const { data: sides = [] } = useSides();
-  const matches = platformMatches.length > 0 ? platformMatches : fallbackMatches;
-  const rankings = platformRankings.length > 0 ? platformRankings : fallbackRankings;
-  const players = platformPlayers.length > 0 ? platformPlayers : fallbackPlayers;
   const bettingSuggestions = odds.length > 0 ? buildOddsSuggestions(odds) : buildBettingSuggestions(matches, rankings);
+  const mapCount = new Set(matches.flatMap((match) => match.maps.map((map) => map.name))).size;
 
   return (
     <div className="space-y-4">
@@ -52,10 +46,10 @@ export function DashboardView() {
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Partidas indexadas" value={(matches.length || counts?.matches || 0).toLocaleString("pt-BR")} delta="HLTV/cache" tone="positive" />
-        <MetricCard label="Times monitorados" value={(rankings.length || counts?.teams || 0).toLocaleString("pt-BR")} delta="Ranking HLTV" />
-        <MetricCard label="Jogadores ativos" value={(players.length || counts?.players || 0).toLocaleString("pt-BR")} delta="HLTV + fallback" tone="positive" />
-        <MetricCard label="Mapas oficiais" value={(maps.length || counts?.maps || 0).toLocaleString("pt-BR")} delta={`${sides.length || 2} lados`} />
+        <MetricCard label="Partidas indexadas" value={matches.length.toLocaleString("pt-BR")} delta={`${liveMatches.length} ao vivo`} tone="positive" />
+        <MetricCard label="Times monitorados" value={(teams.length || rankings.length).toLocaleString("pt-BR")} delta="Ranking HLTV" />
+        <MetricCard label="Jogadores ativos" value={players.length.toLocaleString("pt-BR")} delta="Player ranking" tone="positive" />
+        <MetricCard label="Mapas mapeados" value={mapCount.toLocaleString("pt-BR")} delta="Historico HLTV" />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.45fr_0.9fr]">
@@ -125,7 +119,7 @@ export function DashboardView() {
                 {matches.slice(0, 6).map((match) => (
                   <tr key={match.id}>
                     <Td className="font-medium text-slate-100">{match.team1.name} vs {match.team2.name}</Td>
-                    <Td>{match.event ?? "CS API"}</Td>
+                    <Td>{match.event ?? "HLTV"}</Td>
                     <Td><Badge variant="muted">{match.format ?? "BO3"}</Badge></Td>
                     <Td>{match.maps?.[0]?.name ?? "-"}</Td>
                     <Td className="font-mono">{match.team1.score ?? "-"} : {match.team2.score ?? "-"}</Td>
@@ -204,21 +198,23 @@ export function DashboardView() {
       </section>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {teamInsights.map((team) => (
+        {rankings.slice(0, 4).map((team) => (
           <Card key={team.id} className="p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-xs text-slate-500">#{team.rank} ranking</div>
                 <div className="mt-1 text-base font-semibold text-slate-100">{team.name}</div>
               </div>
-              <Badge variant={team.streak.startsWith("W") ? "success" : "danger"}>{team.streak}</Badge>
+              <Badge variant={(team.change ?? 0) >= 0 ? "success" : "danger"}>
+                {(team.change ?? 0) > 0 ? "+" : ""}{team.change ?? 0}
+              </Badge>
             </div>
             <div className="mt-4 h-2 rounded-full bg-slate-800">
-              <div className="h-2 rounded-full bg-sky-400" style={{ width: `${team.winRate}%` }} />
+              <div className="h-2 rounded-full bg-sky-400" style={{ width: `${Math.max(8, 100 - team.rank)}%` }} />
             </div>
             <div className="mt-2 flex justify-between text-xs text-slate-500">
-              <span>Win rate {team.winRate}%</span>
-              <span>{team.mapPool}</span>
+              <span>{team.points ?? "-"} pts</span>
+              <span>HLTV</span>
             </div>
           </Card>
         ))}

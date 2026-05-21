@@ -1,6 +1,6 @@
 # CS STATS
 
-Aplicacao web moderna para analise estatistica de Counter-Strike 2. A fonte principal de dados e o pacote unofficial `hltv`, sempre executado no backend. A CSAPI.de permanece como fallback complementar.
+Aplicacao web moderna para analise estatistica de Counter-Strike 2. A fonte de dados e o pacote unofficial `hltv`, sempre executado no backend.
 
 > Analise estatistica baseada em dados historicos. As sugestoes nao garantem lucro.
 
@@ -53,9 +53,17 @@ Endpoint preparado para Vercel Cron ou Supabase Scheduler:
 ```bash
 POST /api/cron/hltv?task=all
 POST /api/cron/hltv?task=live
+POST /api/cron/hltv?task=matches
 POST /api/cron/hltv?task=rankings
+POST /api/cron/hltv?task=teams
+POST /api/cron/hltv?task=teams&details=true
+POST /api/cron/hltv?task=team&id=9565
+POST /api/cron/hltv?task=players
+POST /api/cron/hltv?task=events
 POST /api/cron/hltv?task=odds
 ```
+
+`task=teams` sincroniza todos os times retornados pelo ranking HLTV como referencias. `task=team&id=...` enriquece um time especifico com lineup, map pool, eventos e estatisticas para apostas. `task=teams&details=true` tenta enriquecer todos os times do ranking e deve ser usado com cuidado por volume de requisicoes HLTV.
 
 Quando `CRON_SECRET` estiver configurado, envie `Authorization: Bearer <CRON_SECRET>`.
 
@@ -80,10 +88,6 @@ Tabelas principais:
 - `sync_logs`
 - `hltv_cache`
 
-## Fallback CSAPI.de
-
-A integracao CSAPI.de continua disponivel em `/api/cs/*` e nos services legados. Ela serve como fallback e complemento quando o cache HLTV ainda nao foi populado.
-
 ## Setup local
 
 ```bash
@@ -95,7 +99,6 @@ Crie um `.env.local` baseado em `.env.example`:
 
 ```env
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-CS_API_BASE_URL=https://api.csapi.de
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=

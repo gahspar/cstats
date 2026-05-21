@@ -6,7 +6,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const limit = Number(request.nextUrl.searchParams.get("limit") ?? "30");
-  const data = await hltvRepository.listRankings(Number.isFinite(limit) ? limit : 30);
+  const all = request.nextUrl.searchParams.get("all") === "true";
+  const data = await hltvRepository.listRankings(all ? undefined : Number.isFinite(limit) ? limit : 30);
 
-  return dataResponse(data, { limit });
+  return dataResponse(data, { limit: all ? "all" : limit });
 }

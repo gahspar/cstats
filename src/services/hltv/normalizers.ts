@@ -10,7 +10,9 @@ import type {
   ProviderOdds,
   Team,
   TeamRanking,
+  PlayerRanking,
 } from "hltv";
+import type { FullTeamStats } from "hltv/lib/endpoints/getTeamStats";
 import type {
   MatchLifecycle,
   NormalizedEvent,
@@ -174,6 +176,30 @@ export function normalizeTeam(team: FullTeam): NormalizedTeam {
   };
 }
 
+export function normalizeTeamStats(stats: FullTeamStats, base?: NormalizedTeam): NormalizedTeam {
+  return {
+    id: stats.id,
+    name: stats.name,
+    logoUrl: base?.logoUrl ?? null,
+    country: base?.country ?? null,
+    rank: base?.rank ?? null,
+    players: stats.currentLineup.flatMap((player) => {
+      const normalized = normalizePlayerRef(player);
+      return normalized ? [normalized] : [];
+    }),
+    rankingDevelopment: base?.rankingDevelopment ?? [],
+    overview: stats.overview,
+    mapStats: stats.mapStats,
+    recentMatches: stats.matches,
+    events: stats.events,
+    social: base?.social,
+    raw: {
+      profile: base?.raw,
+      stats,
+    },
+  };
+}
+
 export function normalizePlayer(player: FullPlayer): NormalizedPlayer {
   return {
     id: player.id,
@@ -186,6 +212,26 @@ export function normalizePlayer(player: FullPlayer): NormalizedPlayer {
     statistics: player.statistics ?? undefined,
     achievements: player.achievements,
     raw: player,
+  };
+}
+
+export function normalizePlayerRanking(entry: PlayerRanking): NormalizedPlayer {
+  const team = entry.teams[0];
+
+  return {
+    id: entry.player.id ?? Number(`${entry.player.name.length}${entry.maps}${Math.round(entry.kd * 100)}`),
+    nickname: entry.player.name,
+    team: normalizeTeamRef(team),
+    statistics: {
+      rating: entry.rating2 ?? entry.rating1 ?? null,
+      mapsPlayed: entry.maps,
+      killsPerRound: null,
+      deathsPerRound: null,
+      roundsContributed: entry.rounds,
+      headshots: null,
+      kd: entry.kd,
+    },
+    raw: entry,
   };
 }
 

@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const { page, pageSize } = getPagination(request, 50);
   const query = request.nextUrl.searchParams.get("query");
-  const data = await hltvRepository.listPlayers({ page, pageSize, query });
+  const all = request.nextUrl.searchParams.get("all") === "true";
+  const data = await hltvRepository.listPlayers({ page, pageSize, query, all });
 
-  return dataResponse(data, { page, pageSize, query });
+  return dataResponse(data, { page, pageSize, query, all });
 }

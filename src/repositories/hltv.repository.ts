@@ -11,7 +11,7 @@ import { createSupabaseServerClient } from "./supabase-server";
 
 function pageRange(page = 1, pageSize = 25) {
   const safePage = Math.max(1, page);
-  const safeSize = Math.min(Math.max(1, pageSize), 100);
+  const safeSize = Math.max(1, pageSize);
   const from = (safePage - 1) * safeSize;
   return { from, to: from + safeSize - 1 };
 }
@@ -20,14 +20,51 @@ function normalizeQueryValue(value: string | null) {
   return value?.trim() || null;
 }
 
+async function collectPages<T>(buildPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>, pageSize = 1000) {
+  const rows: T[] = [];
+  let from = 0;
+
+  while (true) {
+    const to = from + pageSize - 1;
+    const { data, error } = await buildPage(from, to);
+    if (error) return { data: rows, error };
+
+    const page = data ?? [];
+    rows.push(...page);
+
+    if (page.length < pageSize) {
+      return { data: rows, error: null };
+    }
+
+    from += pageSize;
+  }
+}
+
 export const hltvRepository = {
-  async listMatches({ page, pageSize, status }: { page?: number; pageSize?: number; status?: string | null }) {
+  async listMatches({ page, pageSize, status, all }: { page?: number; pageSize?: number; status?: string | null; all?: boolean }) {
     const supabase = createSupabaseServerClient();
     if (!supabase) return [];
 
-    const { from, to } = pageRange(page, pageSize);
-    let query = supabase.from("matches").select("*").order("starts_at", { ascending: false }).range(from, to);
+    if (all) {
+      const { data, error } = await collectPages((from, to) => {
+        let query = supabase.from("matches").select("*").eq("source", "hltv").order("starts_at", { ascending: false }).range(from, to);
+        if (status) query = query.eq("status", status);
+        return query;
+      });
+      if (error) {
+        console.error("[repository] listMatches failed", error);
+        return [];
+      }
+
+      return data;
+    }
+
+    let query = supabase.from("matches").select("*").eq("source", "hltv").order("starts_at", { ascending: false });
     if (status) query = query.eq("status", status);
+    {
+      const { from, to } = pageRange(page, pageSize);
+      query = query.range(from, to);
+    }
 
     const { data, error } = await query;
     if (error) {
@@ -51,14 +88,32 @@ export const hltvRepository = {
     return data ?? [];
   },
 
-  async listTeams({ page, pageSize, query }: { page?: number; pageSize?: number; query?: string | null }) {
+  async listTeams({ page, pageSize, query, all }: { page?: number; pageSize?: number; query?: string | null; all?: boolean }) {
     const supabase = createSupabaseServerClient();
     if (!supabase) return [];
 
-    const { from, to } = pageRange(page, pageSize);
-    let request = supabase.from("teams").select("*").order("rank", { ascending: true, nullsFirst: false }).range(from, to);
     const search = normalizeQueryValue(query ?? null);
+
+    if (all) {
+      const { data, error } = await collectPages((from, to) => {
+        let request = supabase.from("teams").select("*").order("rank", { ascending: true, nullsFirst: false }).range(from, to);
+        if (search) request = request.ilike("name", `%${search}%`);
+        return request;
+      });
+      if (error) {
+        console.error("[repository] listTeams failed", error);
+        return [];
+      }
+
+      return data;
+    }
+
+    let request = supabase.from("teams").select("*").order("rank", { ascending: true, nullsFirst: false });
     if (search) request = request.ilike("name", `%${search}%`);
+    {
+      const { from, to } = pageRange(page, pageSize);
+      request = request.range(from, to);
+    }
 
     const { data, error } = await request;
     if (error) {
@@ -69,14 +124,32 @@ export const hltvRepository = {
     return data ?? [];
   },
 
-  async listPlayers({ page, pageSize, query }: { page?: number; pageSize?: number; query?: string | null }) {
+  async listPlayers({ page, pageSize, query, all }: { page?: number; pageSize?: number; query?: string | null; all?: boolean }) {
     const supabase = createSupabaseServerClient();
     if (!supabase) return [];
 
-    const { from, to } = pageRange(page, pageSize);
-    let request = supabase.from("players").select("*").order("nickname", { ascending: true }).range(from, to);
     const search = normalizeQueryValue(query ?? null);
+
+    if (all) {
+      const { data, error } = await collectPages((from, to) => {
+        let request = supabase.from("players").select("*").order("nickname", { ascending: true }).range(from, to);
+        if (search) request = request.ilike("nickname", `%${search}%`);
+        return request;
+      });
+      if (error) {
+        console.error("[repository] listPlayers failed", error);
+        return [];
+      }
+
+      return data;
+    }
+
+    let request = supabase.from("players").select("*").order("nickname", { ascending: true });
     if (search) request = request.ilike("nickname", `%${search}%`);
+    {
+      const { from, to } = pageRange(page, pageSize);
+      request = request.range(from, to);
+    }
 
     const { data, error } = await request;
     if (error) {
@@ -87,17 +160,62 @@ export const hltvRepository = {
     return data ?? [];
   },
 
-  async listRankings(limit = 30) {
+  async listRankings(limit?: number) {
     const supabase = createSupabaseServerClient();
     if (!supabase) return [];
 
-    const { data, error } = await supabase.from("rankings").select("*").order("place", { ascending: true }).limit(limit);
+    if (!limit) {
+      const { data, error } = await collectPages((from, to) =>
+        supabase.from("rankings").select("*").eq("provider", "hltv").order("place", { ascending: true }).range(from, to),
+      );
+      if (error) {
+        console.error("[repository] listRankings failed", error);
+        return [];
+      }
+
+      return data;
+    }
+
+    let query = supabase.from("rankings").select("*").eq("provider", "hltv").order("place", { ascending: true });
+    if (limit) query = query.limit(limit);
+
+    const { data, error } = await query;
     if (error) {
       console.error("[repository] listRankings failed", error);
       return [];
     }
 
     return data ?? [];
+  },
+
+  async getTeam(id: number) {
+    const supabase = createSupabaseServerClient();
+    if (!supabase) return null;
+
+    const { data, error } = await supabase.from("teams").select("*").eq("id", id).maybeSingle();
+    if (error) {
+      console.error("[repository] getTeam failed", error);
+      return null;
+    }
+
+    return data;
+  },
+
+  async listTeamMatches(teamId: number) {
+    const supabase = createSupabaseServerClient();
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+      .from("matches")
+      .select("*")
+      .eq("source", "hltv")
+      .order("starts_at", { ascending: false });
+    if (error) {
+      console.error("[repository] listTeamMatches failed", error);
+      return [];
+    }
+
+    return (data ?? []).filter((match) => match.team1?.id === teamId || match.team2?.id === teamId);
   },
 
   async listEvents(limit = 40) {
@@ -154,6 +272,14 @@ export const hltvRepository = {
 
     const { error } = await supabase.from("matches").upsert(rows);
     if (error) console.error("[repository] upsertMatches failed", error);
+  },
+
+  async replaceMatches(matches: NormalizedMatch[]) {
+    const supabase = createSupabaseServerClient();
+    if (!supabase) return;
+
+    await supabase.from("matches").delete().neq("id", -1);
+    await this.upsertMatches(matches);
   },
 
   async replaceLiveMatches(matches: NormalizedMatch[]) {
@@ -301,5 +427,31 @@ export const hltvRepository = {
     });
 
     if (error) console.error("[repository] insertSyncLog failed", error);
+  },
+
+  async getSyncStatus() {
+    const supabase = createSupabaseServerClient();
+    if (!supabase) return null;
+
+    const tables = ["matches", "live_matches", "teams", "players", "rankings", "events", "odds_history"] as const;
+    const counts = Object.fromEntries(
+      await Promise.all(
+        tables.map(async (table) => {
+          const { count, error } = await supabase.from(table).select("*", { count: "exact", head: true });
+          return [table, error ? null : count ?? 0];
+        }),
+      ),
+    );
+    const { data: logs, error } = await supabase
+      .from("sync_logs")
+      .select("worker,status,provider,records_processed,message,metadata,created_at")
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error) {
+      console.error("[repository] getSyncStatus logs failed", error);
+    }
+
+    return { counts, logs: logs ?? [] };
   },
 };

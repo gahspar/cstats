@@ -5,7 +5,7 @@ import { QueryProvider } from "@/components/query-provider";
 
 export const metadata: Metadata = {
   title: "CS STATS",
-  description: "Analytics profissional para Counter-Strike 2 com dados públicos da CS API.",
+  description: "Analytics profissional para Counter-Strike 2 com dados HLTV sincronizados em cache local.",
 };
 
 export default function RootLayout({

@@ -1,6 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Filter, SlidersHorizontal, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -8,28 +9,24 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, Td, Th } from "@/components/ui/table";
-import { useRankings, useTeams } from "@/hooks/use-csapi";
 import { usePlatformRankings, usePlatformTeams } from "@/hooks/use-platform-data";
 import { useFavoriteTeams } from "@/hooks/use-favorite-teams";
-import { teamInsights } from "@/lib/api/mock-data";
 import { cn } from "@/lib/utils";
 
 const pageSize = 80;
 
 export function TeamsView() {
   const searchParams = useSearchParams();
-  const { data: fallbackRankings = [] } = useRankings();
-  const { data: fallbackTeams = [] } = useTeams();
-  const { data: platformRankings = [] } = usePlatformRankings(100);
-  const { data: platformTeams = [] } = usePlatformTeams(undefined, 100);
+  const { data: platformRankings = [] } = usePlatformRankings("all");
+  const { data: platformTeams = [] } = usePlatformTeams(undefined, "all");
   const { isFavorite, toggleFavorite, favorites } = useFavoriteTeams();
   const [query, setQuery] = useState(searchParams.get("query") ?? "");
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [visibleCount, setVisibleCount] = useState(pageSize);
 
   const teamsWithRankings = useMemo(() => {
-    const rankings = platformRankings.length > 0 ? platformRankings : fallbackRankings;
-    const teams = platformTeams.length > 0 ? platformTeams : fallbackTeams;
+    const rankings = platformRankings;
+    const teams = platformTeams.length > 0 ? platformTeams : platformRankings;
     const rankingById = new Map(rankings.map((team) => [team.id, team]));
 
     return teams
@@ -48,7 +45,7 @@ export function TeamsView() {
 
         return teamA.name.localeCompare(teamB.name);
       });
-  }, [fallbackRankings, fallbackTeams, platformRankings, platformTeams]);
+  }, [platformRankings, platformTeams]);
 
   const filteredRankings = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -108,7 +105,6 @@ export function TeamsView() {
             </thead>
             <tbody>
               {visibleTeams.map((team) => {
-                const insight = teamInsights.find((item) => item.id === team.id);
                 const favorite = isFavorite(team.id);
 
                 return (
@@ -118,17 +114,19 @@ export function TeamsView() {
                         variant="ghost"
                         className="h-8 w-8 px-0"
                         aria-label={favorite ? "Remover favorito" : "Adicionar favorito"}
-                        onClick={() => toggleFavorite({ id: team.id, name: team.name, rank: team.rank })}
+                        onClick={() => toggleFavorite({ id: team.id, name: team.name, rank: team.rank ?? undefined })}
                       >
                         <Star className={cn("h-4 w-4", favorite && "fill-amber-300 text-amber-300")} />
                       </Button>
                     </Td>
                     <Td className="font-mono text-slate-500">{team.rank ? `#${team.rank}` : "N/R"}</Td>
-                    <Td className="font-medium text-slate-100">{team.name}</Td>
+                    <Td className="font-medium text-slate-100">
+                      <Link className="hover:text-sky-300" href={`/teams/${team.id}`}>{team.name}</Link>
+                    </Td>
                     <Td>{team.country ?? "-"}</Td>
-                    <Td className="font-mono">{insight?.winRate ?? 55}%</Td>
-                    <Td><Badge variant={insight?.streak.startsWith("W") ? "success" : "danger"}>{insight?.streak ?? "N/A"}</Badge></Td>
-                    <Td>{insight?.mapPool ?? "A definir"}</Td>
+                    <Td className="font-mono">via detalhe</Td>
+                    <Td><Badge variant={(team.change ?? 0) >= 0 ? "success" : "danger"}>{(team.change ?? 0) > 0 ? "+" : ""}{team.change ?? 0}</Badge></Td>
+                    <Td>HLTV stats</Td>
                     <Td className="font-mono">{team.points ?? "-"}</Td>
                   </tr>
                 );

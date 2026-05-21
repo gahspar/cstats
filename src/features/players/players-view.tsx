@@ -6,14 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, Td, Th } from "@/components/ui/table";
-import { usePlayerStats } from "@/hooks/use-csapi";
 import { usePlatformPlayers } from "@/hooks/use-platform-data";
 
 export function PlayersView() {
   const searchParams = useSearchParams();
-  const { data: fallbackPlayers = [] } = usePlayerStats();
-  const { data: platformPlayers = [] } = usePlatformPlayers(undefined, 100);
-  const players = platformPlayers.length > 0 ? platformPlayers : fallbackPlayers;
+  const { data: players = [] } = usePlatformPlayers(undefined, "all");
   const [query, setQuery] = useState(searchParams.get("query") ?? "");
   const filteredPlayers = useMemo(() => {
     const normalized = query.trim().toLowerCase();

@@ -12,7 +12,7 @@ export async function syncAll() {
     syncEvents(),
   ]);
 
-  const teams = await syncTeams(30);
+  const teams = await syncTeams(false);
 
   return {
     rankings: rankings.length,
