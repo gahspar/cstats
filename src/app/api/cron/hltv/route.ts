@@ -8,13 +8,20 @@ function assertCronAccess(request: NextRequest) {
   if (!secret) return true;
 
   const token = request.headers.get("authorization")?.replace("Bearer ", "");
+  const headerSecret = request.headers.get("x-cron-secret");
   const querySecret = request.nextUrl.searchParams.get("secret");
-  return token === secret || querySecret === secret;
+  return token === secret || headerSecret === secret || querySecret === secret;
 }
 
 async function runCronTask(request: NextRequest) {
   if (!assertCronAccess(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      {
+        error: "Unauthorized",
+        hint: "Envie Authorization: Bearer <CRON_SECRET>, x-cron-secret, ou ?secret= com caracteres especiais URL-encoded.",
+      },
+      { status: 401 },
+    );
   }
 
   const task = request.nextUrl.searchParams.get("task") ?? "all";

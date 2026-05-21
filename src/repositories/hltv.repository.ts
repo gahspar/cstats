@@ -9,6 +9,28 @@ import type {
 } from "@/types/hltv";
 import { createSupabaseServerClient } from "./supabase-server";
 
+type RepositoryError = {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+};
+
+function formatRepositoryError(error: unknown): RepositoryError | null {
+  if (!error) return null;
+  if (typeof error === "object") {
+    const value = error as RepositoryError;
+    return {
+      code: value.code,
+      message: value.message,
+      details: value.details,
+      hint: value.hint,
+    };
+  }
+
+  return { message: String(error) };
+}
+
 function pageRange(page = 1, pageSize = 25) {
   const safePage = Math.max(1, page);
   const safeSize = Math.max(1, pageSize);
@@ -434,13 +456,15 @@ export const hltvRepository = {
     if (!supabase) return null;
 
     const tables = ["matches", "live_matches", "teams", "players", "rankings", "events", "odds_history"] as const;
-    const counts = Object.fromEntries(
-      await Promise.all(
-        tables.map(async (table) => {
-          const { count, error } = await supabase.from(table).select("*", { count: "exact", head: true });
-          return [table, error ? null : count ?? 0];
-        }),
-      ),
+    const tableResults = await Promise.all(
+      tables.map(async (table) => {
+        const { count, error } = await supabase.from(table).select("*", { count: "exact", head: true });
+        return { table, count: error ? null : count ?? 0, error: formatRepositoryError(error) };
+      }),
+    );
+    const counts = Object.fromEntries(tableResults.map((result) => [result.table, result.count]));
+    const errors = Object.fromEntries(
+      tableResults.filter((result) => result.error).map((result) => [result.table, result.error]),
     );
     const [hltvMatches, hltvRankings, latestHltvMatch, latestRanking] = await Promise.all([
       supabase.from("matches").select("*", { count: "exact", head: true }).eq("source", "hltv"),
@@ -463,6 +487,14 @@ export const hltvRepository = {
       hltvCounts: {
         matches: hltvMatches.error ? null : hltvMatches.count ?? 0,
         rankings: hltvRankings.error ? null : hltvRankings.count ?? 0,
+      },
+      errors: {
+        ...errors,
+        hltvMatches: formatRepositoryError(hltvMatches.error),
+        hltvRankings: formatRepositoryError(hltvRankings.error),
+        latestHltvMatch: formatRepositoryError(latestHltvMatch.error),
+        latestRanking: formatRepositoryError(latestRanking.error),
+        syncLogs: formatRepositoryError(error),
       },
       latest: {
         match: latestHltvMatch.error ? null : latestHltvMatch.data,
