@@ -11,6 +11,7 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { Table, Td, Th } from "@/components/ui/table";
 import {
   buildOddsSuggestions,
+  useSyncStatus,
   usePlatformLiveMatches,
   usePlatformMatches,
   usePlatformOdds,
@@ -27,8 +28,10 @@ export function DashboardView() {
   const { data: teams = [] } = usePlatformTeams(undefined, "all");
   const { data: players = [] } = usePlatformPlayers(undefined, "all");
   const { data: odds = [] } = usePlatformOdds(20);
+  const { data: syncStatus } = useSyncStatus();
   const bettingSuggestions = odds.length > 0 ? buildOddsSuggestions(odds) : buildBettingSuggestions(matches, rankings);
   const mapCount = new Set(matches.flatMap((match) => match.maps.map((map) => map.name))).size;
+  const hltvEmpty = matches.length === 0 && rankings.length === 0 && players.length === 0;
 
   return (
     <div className="space-y-4">
@@ -51,6 +54,26 @@ export function DashboardView() {
         <MetricCard label="Jogadores ativos" value={players.length.toLocaleString("pt-BR")} delta="Player ranking" tone="positive" />
         <MetricCard label="Mapas mapeados" value={mapCount.toLocaleString("pt-BR")} delta="Historico HLTV" />
       </section>
+
+      {hltvEmpty ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Cache HLTV vazio</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+            <div className="text-sm leading-6 text-slate-400">
+              Nenhum registro HLTV foi encontrado no banco local. Rode o cron de sincronizacao em producao e confira
+              os logs em <span className="font-mono text-slate-300">/api/sync/status</span>.
+              {syncStatus.logs[0]?.message ? (
+                <span className="mt-2 block text-xs text-amber-200">Ultimo log: {syncStatus.logs[0].message}</span>
+              ) : null}
+            </div>
+            <div className="text-xs text-slate-500">
+              matches: {syncStatus.hltvCounts.matches ?? 0} · rankings: {syncStatus.hltvCounts.rankings ?? 0}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <section className="grid gap-4 xl:grid-cols-[1.45fr_0.9fr]">
         <Card>

@@ -8,10 +8,11 @@ function assertCronAccess(request: NextRequest) {
   if (!secret) return true;
 
   const token = request.headers.get("authorization")?.replace("Bearer ", "");
-  return token === secret;
+  const querySecret = request.nextUrl.searchParams.get("secret");
+  return token === secret || querySecret === secret;
 }
 
-export async function POST(request: NextRequest) {
+async function runCronTask(request: NextRequest) {
   if (!assertCronAccess(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -25,29 +26,50 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing team id" }, { status: 400 });
   }
 
-  const result =
-    task === "live"
-      ? await syncLiveMatches()
-      : task === "matches"
-        ? await syncMatches()
-        : task === "rankings"
-          ? await syncRankings()
-          : task === "teams"
-            ? await syncTeams(request.nextUrl.searchParams.get("details") === "true")
-            : task === "team"
-              ? await syncTeamDetail(id)
-            : task === "events"
-              ? await syncEvents()
-              : task === "players"
-                ? await syncPlayers([])
-                : task === "odds"
-                  ? await syncOdds(Number.isFinite(id) ? id : undefined)
-                  : await syncAll();
+  try {
+    const result =
+      task === "live"
+        ? await syncLiveMatches()
+        : task === "matches"
+          ? await syncMatches()
+          : task === "rankings"
+            ? await syncRankings()
+            : task === "teams"
+              ? await syncTeams(request.nextUrl.searchParams.get("details") === "true")
+              : task === "team"
+                ? await syncTeamDetail(id)
+              : task === "events"
+                ? await syncEvents()
+                : task === "players"
+                  ? await syncPlayers([])
+                  : task === "odds"
+                    ? await syncOdds(Number.isFinite(id) ? id : undefined)
+                    : await syncAll();
 
-  return NextResponse.json({
-    task,
-    result,
-    durationMs: Date.now() - startedAt,
-    disclaimer: "Analise estatistica baseada em dados historicos.",
-  });
+    return NextResponse.json({
+      ok: true,
+      task,
+      result,
+      durationMs: Date.now() - startedAt,
+      disclaimer: "Analise estatistica baseada em dados historicos.",
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        task,
+        error: error instanceof Error ? error.message : String(error),
+        durationMs: Date.now() - startedAt,
+      },
+      { status: 500 },
+    );
+  }
+}
+
+export async function GET(request: NextRequest) {
+  return runCronTask(request);
+}
+
+export async function POST(request: NextRequest) {
+  return runCronTask(request);
 }

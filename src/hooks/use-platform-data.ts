@@ -245,6 +245,31 @@ export function usePlatformOdds(limit = 100) {
   });
 }
 
+export function useSyncStatus() {
+  return useQuery({
+    queryKey: ["hltv", "sync-status"],
+    queryFn: () =>
+      getInternal<{
+        counts: Record<string, number | null>;
+        hltvCounts: Record<string, number | null>;
+        latest: Record<string, unknown>;
+        logs: Array<{
+          worker: string;
+          status: string;
+          records_processed: number;
+          message?: string | null;
+          created_at: string;
+        }>;
+      }>("/api/sync/status"),
+    initialData: {
+      counts: {},
+      hltvCounts: {},
+      latest: {},
+      logs: [],
+    },
+  });
+}
+
 export function buildOddsSuggestions(odds: PlatformOdds[]): BettingSuggestion[] {
   return odds.slice(0, 4).map((odd) => ({
     id: odd.id,

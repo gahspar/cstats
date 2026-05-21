@@ -442,6 +442,12 @@ export const hltvRepository = {
         }),
       ),
     );
+    const [hltvMatches, hltvRankings, latestHltvMatch, latestRanking] = await Promise.all([
+      supabase.from("matches").select("*", { count: "exact", head: true }).eq("source", "hltv"),
+      supabase.from("rankings").select("*", { count: "exact", head: true }).eq("provider", "hltv"),
+      supabase.from("matches").select("id,starts_at,event_name,updated_at").eq("source", "hltv").order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("rankings").select("team_id,place,captured_at").eq("provider", "hltv").order("captured_at", { ascending: false }).limit(1).maybeSingle(),
+    ]);
     const { data: logs, error } = await supabase
       .from("sync_logs")
       .select("worker,status,provider,records_processed,message,metadata,created_at")
@@ -452,6 +458,17 @@ export const hltvRepository = {
       console.error("[repository] getSyncStatus logs failed", error);
     }
 
-    return { counts, logs: logs ?? [] };
+    return {
+      counts,
+      hltvCounts: {
+        matches: hltvMatches.error ? null : hltvMatches.count ?? 0,
+        rankings: hltvRankings.error ? null : hltvRankings.count ?? 0,
+      },
+      latest: {
+        match: latestHltvMatch.error ? null : latestHltvMatch.data,
+        ranking: latestRanking.error ? null : latestRanking.data,
+      },
+      logs: logs ?? [],
+    };
   },
 };
