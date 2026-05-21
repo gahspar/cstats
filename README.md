@@ -1,6 +1,8 @@
 # CS STATS
 
-Aplicacao web moderna para analise estatistica de Counter-Strike 2, usando dados publicos da [CS API](https://www.csapi.de/).
+Aplicacao web moderna para analise estatistica de Counter-Strike 2. A fonte principal de dados e o pacote unofficial `hltv`, sempre executado no backend. A CSAPI.de permanece como fallback complementar.
+
+> Analise estatistica baseada em dados historicos. As sugestoes nao garantem lucro.
 
 ## Stack
 
@@ -9,60 +11,78 @@ Aplicacao web moderna para analise estatistica de Counter-Strike 2, usando dados
 - TailwindCSS 4
 - shadcn/ui style components
 - TanStack Query
-- Axios com retry e rate limit simples
-- Zod para validacao de payloads
-- Recharts para visualizacao
-- Supabase para Auth, PostgreSQL, Storage e funcoes futuras
+- Axios
+- Recharts
+- Supabase para Auth, PostgreSQL, Storage, cache e logs
+- `hltv` unofficial package para ingestao server-side
 
-## Modulos iniciais
+## Arquitetura de Dados
 
-- Dashboard principal com indicadores, ranking, ultimas partidas, graficos e sugestoes estatisticas
-- Times com ranking, win rate, streak, map pool e filtros
-- Jogadores com rating, ADR, KAST, HS%, KD e historico base
-- Partidas com calendario, formato, score e probabilidade calculada
-- Inteligencia/apostas com fatores de decisao e disclaimer obrigatorio
-
-> Analise estatistica baseada em dados historicos. As sugestoes nao garantem lucro.
-
-## API
-
-Base URL padrao:
-
-```env
-CS_API_BASE_URL=https://api.csapi.de
+```txt
+HLTV NPM Package
+  -> services/workers server-side
+  -> Supabase/Postgres + cache
+  -> API routes internas
+  -> frontend
 ```
 
-Endpoints mapeados inicialmente:
+O frontend nunca importa ou executa o pacote `hltv` diretamente. As rotas internas leem somente dados locais do Supabase/cache:
 
-- `GET /counts`
-- `GET /sides/` e `GET /sides/{id}`
-- `GET /maps/` e `GET /maps/{id}`
-- `GET /fantasy/` e `GET /fantasy/{id}`
-- `GET /rankings/`
-- `GET /matches/`, `GET /matches/latest`, `GET /matches/{matchid}` e `GET /matches/{matchid}/stats`
-- `GET /teams/`, `GET /teams/{teamid}`, `GET /teams/{teamid}/matchhistory` e `GET /teams/{teamid}/stats`
-- `GET /players/`, `GET /players/stats`, `GET /players/stats/raw`, `GET /players/stats/raw/{outcome}`, `GET /players/{playerid}` e `GET /players/{playerid}/stats/{group}`
-- `GET /predict/{team_id_a}/{team_id_b}`
-- `GET /status`
+- `/api/matches`
+- `/api/live`
+- `/api/teams`
+- `/api/players`
+- `/api/rankings`
+- `/api/events`
+- `/api/odds`
 
-O browser consome o proxy interno `/api/cs/*`, que consulta a API publica no servidor e evita CORS. O client fica em `lib/api/csapi-client.ts` e os normalizadores tipados em `lib/api/csapi-service.ts`.
+## Workers e Cron
+
+Workers em `src/workers`:
+
+- `syncLiveMatches` - partidas ao vivo, cache de 30 segundos.
+- `syncMatches` - proximas partidas e partidas monitoradas.
+- `syncRankings` - ranking HLTV, cache de 1 hora.
+- `syncTeams` - detalhes dos times, cache de 6 horas.
+- `syncPlayers` - detalhes de jogadores, cache de 6 horas.
+- `syncOdds` - historico de odds, cache de 15 segundos.
+- `syncEvents` - eventos, cache de 10 minutos.
+
+Endpoint preparado para Vercel Cron ou Supabase Scheduler:
+
+```bash
+POST /api/cron/hltv?task=all
+POST /api/cron/hltv?task=live
+POST /api/cron/hltv?task=rankings
+POST /api/cron/hltv?task=odds
+```
+
+Quando `CRON_SECRET` estiver configurado, envie `Authorization: Bearer <CRON_SECRET>`.
 
 ## Supabase
 
-A migracao inicial esta em:
+Execute as migrations em `supabase/migrations`:
 
-```txt
-supabase/migrations/001_initial_schema.sql
-```
+- `001_initial_schema.sql`
+- `002_hltv_data_platform.sql`
 
-Estruturas preparadas:
+Tabelas principais:
 
-- Favoritos
-- Historico de analises
-- Times salvos
-- Cache local
-- Logs de partidas
-- Estatisticas processadas
+- `teams`
+- `players`
+- `matches`
+- `live_matches`
+- `rankings`
+- `maps_stats`
+- `odds_history`
+- `events`
+- `processed_predictions`
+- `sync_logs`
+- `hltv_cache`
+
+## Fallback CSAPI.de
+
+A integracao CSAPI.de continua disponivel em `/api/cs/*` e nos services legados. Ela serve como fallback e complemento quando o cache HLTV ainda nao foi populado.
 
 ## Setup local
 
@@ -80,6 +100,7 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 DATABASE_URL=
+CRON_SECRET=
 ```
 
 No `DATABASE_URL`, encode caracteres especiais da senha. Exemplo: `#` vira `%23` e `@` vira `%40`.
@@ -93,23 +114,18 @@ npm run typecheck
 npm run lint
 ```
 
-## Arquitetura
+## Estrutura
 
 ```txt
-app/                  rotas App Router
-components/           UI, layout e graficos reutilizaveis
-features/             modulos de produto por dominio
-hooks/                hooks client-side
-lib/api/              client Axios, services, mock fallback
-lib/supabase/         client Supabase
-types/                contratos TypeScript
-supabase/migrations/  schema SQL inicial
+src/app/              rotas App Router e APIs internas
+src/components/       UI, layout e graficos reutilizaveis
+src/features/         modulos de produto por dominio
+src/hooks/            hooks client-side
+src/services/hltv/    services server-side HLTV
+src/repositories/     acesso Supabase/cache
+src/workers/          jobs de sincronizacao
+src/analytics/        analise de odds e movimentos
+src/engine/           engine estatistica inicial
+src/types/            contratos TypeScript
+supabase/migrations/  schema SQL
 ```
-
-## Proximos passos recomendados
-
-1. Adicionar paginas de detalhe para time, jogador e partida.
-2. Persistir cache e historico analitico no Supabase.
-3. Refinar modelo de probabilidade com pesos configuraveis.
-4. Adicionar testes para normalizadores e scoring estatistico.
-5. Criar Edge Function para ingestao agendada da CS API.
